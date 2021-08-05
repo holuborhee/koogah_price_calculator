@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@4.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlfXvP8YSLkIX8gJHo8tgvskZqMWUnwOQ&libraries=places">
+  </script>
+</head>
+<body>
+  <div id="app">
+    <v-app>
+      <v-main>
+        <v-container fluid>
+          <v-row>
+            <v-col cols="9">
+              <v-row>
+                <v-col cols="7">
+                  <v-select
+                    v-model="weight"
+                    :items="weights"
+                    label="Weight in Kg"
+                  ></v-select>
+                  <v-select
+                    v-model="value"
+                    :items="values"
+                    label="Value of package in Naira"
+                  ></v-select>
+                  <v-text-field
+                    id="from-input"
+                    label="Pickup Location"
+                    type="text"
+                  ></v-text-field>
+                  <v-text-field
+                    id="to-input"
+                    label="Delivery Location"
+                    type="text"
+                  ></v-text-field>
+                  <p>Distance: {{distance}}KM</p>
+                </v-col>
+                <v-col>
+                  <h1>Total {{total}}</h1>
+                  <h3>Weight Charge: {{weightCost}}</h3>
+                  <h3>Value Charge: {{valueCost}}</h3>
+                  <h3>Distance Charge: {{distanceCost}}</h3>
+                  <h3>Base fare: {{baseFare}}</h3>
+                  <h3>Charges: {{charges}}</h3>
+                </v-col>
+              </v-row>
+              
+            </v-col>
+            <v-col cols="3">
+              <v-card>
+                <v-text-field
+                  v-model="baseDistanceCost"
+                  label="Cost Per Kilometer"
+                  type="number"
+                ></v-text-field>
+                <v-text-field
+                  v-model="baseWeightCost"
+                  label="Cost Per Kilogram"
+                  type="number"
+                ></v-text-field>
+                <v-text-field
+                  v-model="valueDivisor"
+                  label="Divisor for Value"
+                  type="number"
+                ></v-text-field>
+                <v-text-field
+                  v-model="baseFare"
+                  label="Base fare"
+                  type="number"
+                ></v-text-field>
+                <v-text-field
+                  v-model="charges"
+                  label="General Charges"
+                  type="number"
+                  readonly
+                ></v-text-field>
+              </v-card>
+            </v-col>
+            <v-col cols="12">
+              <v-row>
+                <v-col cols="8">
+                  <h2>Profit Sharing Formula</h2>
+                  <v-radio-group
+                    v-model="sharingFormula"
+                    column
+                  >
+                    <v-radio
+                      label="Current (30% of total to Koogah)"
+                      value="current"
+                    ></v-radio>
+                    <v-radio
+                      label="Proposed (Base Fare + Charges to Koogah for dispatch lesser than 5K)"
+                      value="proposed"
+                    ></v-radio>
+                  </v-radio-group>
+                  <v-simple-table v-if="sharingFormula === 'proposed'">
+                    <template v-slot:default>
+                      <thead>
+                        <tr>
+                          <th class="text-left">
+                            Total Delivery Price
+                          </th>
+                          <th class="text-left">
+                            Koogah's Share
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>< 5000</td>
+                          <td>Base Fare + Charges</td>
+                        </tr>
+                        <tr>
+                          <td>5000 - 10000</td>
+                          <td>Base Fare + Charges + 10% of (Weight, Value & Distance Charge)</td>
+                        </tr>
+                        <tr>
+                          <td>10000 - 20000</td>
+                          <td>Base Fare + Charges + 20% of (Weight, Value & Distance Charge)</td>
+                        </tr>
+                        <tr>
+                          <td>20000 and above</td>
+                          <td>Base Fare + Charges + 30% of (Weight, Value & Distance Charge)</td>
+                        </tr>
+                      </tbody>
+                    </template>
+                  </v-simple-table>
+                </v-col>
+                <v-col cols="4">
+                  <h2>Koogah {{koogahShare}}</h2>
+                  <h2>Dispatcher {{dispatcherShare}}</h2>
+                </v-col>
+              </v-row>
+            </v-col>
+          </v-row>
+        </v-container>
+      </v-main>
+    </v-app>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    new Vue({
+      el: '#app',
+      vuetify: new Vuetify(),
+      data: {
+        baseDistanceCost: 100,
+        baseWeightCost: 100,
+        valueDivisor: 100,
+        baseFare: 400,
+        charges: 60,
+        weights: [
+          { text: '0-5', value: 5},
+          { text: '6-10', value: 10},
+          { text: '11-15', value: 15},
+          { text: '16-25', value: 25},
+          { text: '26-40', value: 40},
+          { text: '41-100', value: 100},
+          { text: '101-200', value: 200},
+          { text: '201-300', value: 300},
+          { text: '301-400', value: 400},
+          { text: '401-500', value: 500},
+          { text: '>501', value: 1000},
+        ],
+        weight: 5,
+        values: [
+          { text: '0-999', value: 1000},
+          { text: '1000-9,999', value: 10000},
+          { text: '10,000-99,999', value: 100000},
+          { text: '100,000-999,999', value: 1000000},
+          { text: '>1,000,000', value: 10000000},
+        ],
+        value: 1000,
+        distance: 0,
+        sharingFormula: 'current'
+      },
+      computed: {
+        total(){
+          return this.dispatchCost + Number.parseInt(this.baseFare) + this.charges;
+        },
+        weightCost(){
+          return this.weight * this.baseWeightCost;
+        },
+        valueCost(){
+          return this.value / this.valueDivisor;
+        },
+        distanceCost(){
+          return this.distance * this.baseDistanceCost;
+        },
+        dispatchCost(){
+          return this.weightCost + this.valueCost + this.distanceCost
+        },
+        koogahShare(){
+          if(this.sharingFormula === 'current')
+            return 0.3 * this.total
+          else {
+            if(this.total < 5000)
+              return Number.parseInt(this.baseFare) + this.charges
+            else if(this.total <= 10000)
+              return (0.1 * this.dispatchCost) + Number.parseInt(this.baseFare) + this.charges
+            else if(this.total <= 20000)
+              return (0.2 * this.dispatchCost) + Number.parseInt(this.baseFare) + this.charges
+            else
+              return (0.3 * this.dispatchCost) + Number.parseInt(this.baseFare) + this.charges
+          }
+        },
+        dispatcherShare(){
+          if(this.sharingFormula === 'current')
+            return 0.7 * this.total
+          else {
+            if(this.total < 5000)
+              return this.dispatchCost
+            else if(this.total <= 10000)
+              return 0.9 * this.dispatchCost
+            else if(this.total <= 20000)
+              return 0.8 * this.dispatchCost
+            else
+              return 0.7 * this.dispatchCost
+          }
+        }
+      }
+    })
+
+    const options = {
+        componentRestrictions: { country: "ng" },
+        fields: ["formatted_address", "geometry", "name"],
+        strictBounds: false,
+        // types: ["establishment"],
+      };
+    const autocompleteFrom = new google.maps.places.Autocomplete(document.getElementById("from-input"), options);
+    const autocompleteTo = new google.maps.places.Autocomplete(document.getElementById("to-input"), options);
+  </script>
+</body>
+</html>
