@@ -6,7 +6,7 @@
   <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
   <script
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlfXvP8YSLkIX8gJHo8tgvskZqMWUnwOQ&libraries=places">
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlfXvP8YSLkIX8gJHo8tgvskZqMWUnwOQ&libraries=places,distance-matrix">
   </script>
 </head>
 <body>
@@ -38,13 +38,16 @@
                     label="Delivery Location"
                     type="text"
                   ></v-text-field>
+                  <h3>Google Journey Info</h3>
+                  <p>Origin: {{deliveryOrigin}}</p>
+                  <p>Destination: {{deliveryDestination}}</p>
                   <p>Distance: {{distance}}KM</p>
                 </v-col>
                 <v-col>
-                  <h1>Total {{total}}</h1>
+                  <h1>Total {{total | roundTo1DecimalPlace }}</h1>
                   <h3>Weight Charge: {{weightCost}}</h3>
                   <h3>Value Charge: {{valueCost}}</h3>
-                  <h3>Distance Charge: {{distanceCost}}</h3>
+                  <h3>Distance Charge: {{distanceCost | roundTo1DecimalPlace}}</h3>
                   <h3>Base fare: {{baseFare}}</h3>
                   <h3>Charges: {{charges}}</h3>
                 </v-col>
@@ -90,7 +93,7 @@
                     column
                   >
                     <v-radio
-                      label="Current (30% of total to Koogah)"
+                      :label="`Current (${koogahPercentage}% of total to Koogah)`"
                       value="current"
                     ></v-radio>
                     <v-radio
@@ -98,7 +101,13 @@
                       value="proposed"
                     ></v-radio>
                   </v-radio-group>
-                  <v-simple-table v-if="sharingFormula === 'proposed'">
+                  <v-text-field
+                    v-if="sharingFormula === 'current'"
+                    v-model="koogahPercentage"
+                    label="Percentage share for koogah (Remaining percentage goes to the Dispatcher)"
+                    type="number"
+                  ></v-text-field>
+                  <v-simple-table v-else>
                     <template v-slot:default>
                       <thead>
                         <tr>
@@ -132,8 +141,8 @@
                   </v-simple-table>
                 </v-col>
                 <v-col cols="4">
-                  <h2>Koogah {{koogahShare}}</h2>
-                  <h2>Dispatcher {{dispatcherShare}}</h2>
+                  <h2>Koogah {{koogahShare | roundTo1DecimalPlace}}</h2>
+                  <h2>Dispatcher {{dispatcherShare | roundTo1DecimalPlace}}</h2>
                 </v-col>
               </v-row>
             </v-col>
@@ -145,8 +154,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+
   <script>
-    new Vue({
+    const myVue = new Vue({
       el: '#app',
       vuetify: new Vuetify(),
       data: {
@@ -178,7 +188,15 @@
         ],
         value: 1000,
         distance: 0,
-        sharingFormula: 'current'
+        deliveryOrigin: '',
+        deliveryDestination: '',
+        sharingFormula: 'current',
+        koogahPercentage: 15,
+      },
+      filters: {
+        roundTo1DecimalPlace(val){
+          return val.toFixed(1);
+        }
       },
       computed: {
         total(){
@@ -198,7 +216,7 @@
         },
         koogahShare(){
           if(this.sharingFormula === 'current')
-            return 0.3 * this.total
+            return (Number.parseInt(this.koogahPercentage) / 100) * this.total
           else {
             if(this.total < 5000)
               return Number.parseInt(this.baseFare) + this.charges
@@ -212,7 +230,7 @@
         },
         dispatcherShare(){
           if(this.sharingFormula === 'current')
-            return 0.7 * this.total
+            return ((100 - Number.parseInt(this.koogahPercentage)) / 100) * this.total
           else {
             if(this.total < 5000)
               return this.dispatchCost
@@ -224,17 +242,58 @@
               return 0.7 * this.dispatchCost
           }
         }
-      }
+      },
     })
 
     const options = {
         componentRestrictions: { country: "ng" },
-        fields: ["formatted_address", "geometry", "name"],
+        fields: ["place_id", "formatted_address", "geometry", "name"],
         strictBounds: false,
         // types: ["establishment"],
       };
     const autocompleteFrom = new google.maps.places.Autocomplete(document.getElementById("from-input"), options);
     const autocompleteTo = new google.maps.places.Autocomplete(document.getElementById("to-input"), options);
+
+    let placeFrom = null;
+    let placeTo = null;
+
+    autocompleteFrom.addListener("place_changed", () => {
+      const place = autocompleteFrom.getPlace();
+      placeFrom = new google.maps.LatLng(place.geometry.location.lat(), place.geometry.location.lng())
+      getDistance(placeFrom, placeTo)
+    });
+
+    autocompleteTo.addListener("place_changed", () => {
+      const place = autocompleteTo.getPlace();
+      placeTo = new google.maps.LatLng(place.geometry.location.lat(), place.geometry.location.lng())
+      getDistance(placeFrom, placeTo)
+    })
+
+    function getDistance(from, to) {
+      if(from && to) {
+        const matrix = new google.maps.DistanceMatrixService();
+
+        matrix.getDistanceMatrix({
+          origins: [from],
+          destinations: [to],
+          travelMode: google.maps.TravelMode.DRIVING,
+        }, function(response, status) {
+          if(status === "OK"){
+            const kilometer = response.rows[0].elements[0].distance.value / 1000
+            myVue.distance = kilometer.toFixed(1)
+            myVue.deliveryOrigin = response.originAddresses[0]
+            myVue.deliveryDestination = response.destinationAddresses[0]
+          } else {
+            myVue.distance = 0
+            myVue.deliveryOrigin = "Couldn't get location"
+            myVue.deliveryDestination = "Couldn't get location"
+          }
+        });
+      }
+      
+    } 
+
+    
   </script>
 </body>
 </html>
